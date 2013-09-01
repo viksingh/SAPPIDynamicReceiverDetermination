@@ -1,0 +1,204 @@
+package com.saki.dynamic;
+
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.Scanner;
+
+import com.sap.aii.mapping.api.AbstractTransformation;
+import com.sap.aii.mapping.api.DynamicConfiguration;
+import com.sap.aii.mapping.api.DynamicConfigurationKey;
+import com.sap.aii.mapping.api.StreamTransformationConstants;
+import com.sap.aii.mapping.api.StreamTransformationException;
+import com.sap.aii.mapping.api.TransformationInput;
+import com.sap.aii.mapping.api.TransformationOutput;
+
+public class DynamicReceiver extends AbstractTransformation {
+
+	private static String dBURL = "jdbc:sapdb://127.0.0.1/C73?user=SAKIV&password=Abcd1234";
+	private static String TableName = "ROUTING";
+	private static Connection conn = null;
+	private static Statement stmt = null;
+	String fileName = "";
+
+
+	public void transform(TransformationInput input, TransformationOutput output)
+	throws StreamTransformationException {
+		try {
+
+			DynamicConfiguration conf = input.getDynamicConfiguration();
+			DynamicConfigurationKey key1 = DynamicConfigurationKey.create( "http:/"+"/sap.com/xi/XI/System/File","FileName");
+			fileName = conf.get(key1); 			
+
+
+			this.execute(input.getInputPayload().getInputStream(), output
+					.getOutputPayload().getOutputStream());
+
+		} catch (IOException e) {
+
+			e.printStackTrace();
+		}
+	}
+
+	public void execute(InputStream in, OutputStream out)
+	throws StreamTransformationException, IOException {
+		try {
+
+			getTrace().addInfo("Entering Mapping");
+			
+			String inputPayload = new Scanner(in, "UTF-8").useDelimiter("\\A")
+			.next();
+
+			String sapsys = System.getProperty("SAPSYSTEMNAME");
+			write_trace("SAP SID is" + sapsys, sapsys);
+
+			write_trace("Debug - SID IS: " + sapsys, sapsys);
+			write_trace("Warning - SID IS : " + sapsys, sapsys);
+			write_trace("Info - SID IS : " + sapsys, sapsys);
+
+			String XMLDeclaration = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>";
+			String header = "<ns1:Receivers xmlns:ns1=\"http://sap.com/xi/XI/System\">";
+
+			String ReceiverStr = "";
+			String receiver = "";
+
+			receiver = extract_Receiver();
+			if (receiver.trim().length() == 0){
+				receiver = "BS_DUMMY_2";
+			}
+
+
+			ReceiverStr = XMLDeclaration + header + "<Receiver>" + "<Service>"
+			+ receiver + "</Service>" + "</Receiver>"
+			+ "</ns1:Receivers>";
+
+			out.write(ReceiverStr.getBytes());
+		} catch (Exception e) {
+			throw new StreamTransformationException(e.toString());
+		}
+	}
+
+	// Write Trace while testing standalone or PI
+	private void write_trace(String str, String SID) {
+		if (SID == null) {
+			System.out.println(str);
+		} else {
+			getTrace().addInfo(str);
+		}
+	}
+
+	private String extract_Receiver() {
+		String receiverBS = "";
+		createConnectin();
+		receiverBS = selectRouting(fileName);
+		shutdown();
+
+
+
+
+		return receiverBS;
+	}
+
+
+	private static void shutdown() {
+
+		try
+		{
+			if (stmt != null)
+			{
+				stmt.close();
+			}
+			if (conn != null)
+			{
+				DriverManager.getConnection(dBURL + ";shutdown=true");
+				conn.close();
+			}           
+		}
+		catch (SQLException sqlExcept)
+		{
+
+		}		
+
+	}
+
+
+
+	private static String selectRouting( String inputfile) {
+		String receiverBS = "";
+		try
+		{
+			stmt = conn.createStatement();
+			ResultSet results = stmt.executeQuery("select * from " + TableName);
+			ResultSetMetaData rsmd = results.getMetaData();
+			int numberCols = rsmd.getColumnCount();
+
+			while(results.next())
+			{
+				int id = results.getInt(1);
+				String filename = results.getString(2);
+				String rcvBS = results.getString(3);	
+
+				if (inputfile.toLowerCase() .contains( filename.toLowerCase() )  ){
+					receiverBS = rcvBS;
+					break;
+				}
+
+
+
+			}
+			results.close();
+			stmt.close();
+		}
+		catch (SQLException sqlExcept)
+		{
+			sqlExcept.printStackTrace();
+		}
+
+		return receiverBS;
+
+	}
+
+
+
+	private static void createConnectin() {
+
+		try {
+			//			Class.forName("org.Apache.derby.Clientdriver").newInstance();
+
+			Class.forName("com.sap.dbtech.jdbc.DriverSapDB").newInstance();	
+
+			conn = DriverManager.getConnection(dBURL);
+
+		} catch (InstantiationException e) {
+			e.printStackTrace();
+		} catch (IllegalAccessException e) {
+			e.printStackTrace();
+		} catch (ClassNotFoundException e) {
+			e.printStackTrace();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+
+	}
+
+	public static void main(String[] args) {
+
+		try {
+			DynamicReceiver map = new DynamicReceiver();
+			FileInputStream in = new FileInputStream("C:\\TestFiles\\2.xml");
+			FileOutputStream out = new FileOutputStream(
+			"C:\\TestFiles\\testOut.txt");
+			map.execute(in, out);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+}
