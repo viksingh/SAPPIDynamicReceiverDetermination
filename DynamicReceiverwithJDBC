@@ -23,7 +23,7 @@ import com.sap.aii.mapping.api.TransformationOutput;
 
 public class DynamicReceiver extends AbstractTransformation {
 
-	private static String dBURL = "jdbc:sapdb://127.0.0.1/C73?user=SAKIV&password=Abcd1234";
+	private static String dBURL = "jdbc:sapdb://127.0.0.1/C73?user=PICPDATA&password=Abcd1234";
 	private static String TableName = "ROUTING";
 	private static Connection conn = null;
 	private static Statement stmt = null;
@@ -71,9 +71,9 @@ public class DynamicReceiver extends AbstractTransformation {
 			String receiver = "";
 
 			receiver = extract_Receiver();
-			if (receiver.trim().length() == 0){
-				receiver = "BS_DUMMY_2";
-			}
+//			if (receiver.trim().length() == 0){
+//				receiver = "BS_DUMMY_2";
+//			}
 
 
 			ReceiverStr = XMLDeclaration + header + "<Receiver>" + "<Service>"
